@@ -2,7 +2,7 @@ version: "3"
 services:
   def-occlum-keyring:
     # Before changing version numbers, make sure your device is in Standby status, or not registered. Otherwise you will be punished.
-    image: deepsafe/def-occlum-keyring:v1.0.0
+    image: deepsafe/def-occlum-keyring:v0.12.19
     restart: always
     network_mode: "host"
     environment:
