@@ -136,7 +136,7 @@ threads = 5
 target = 500
 
 [network_config]
-protocol_id = "betatestnet"
+protocol_id = "betamainnet"
 port = 38700
 boot_nodes =["/ip4/172.210.130.200/tcp/38701/p2p/12D3KooWQBrkBWb3tLoUpxqXebxg1Eab24LfcFP3hv37ZF2c6qgz","/ip4/20.81.161.179/tcp/38701/p2p/12D3KooWMDqap7HMjA6nos1HpHpWt8JBcPepnZgYSd5PPmovAqD7"]
 share_peer_interval = 30
