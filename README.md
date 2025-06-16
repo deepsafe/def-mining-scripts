@@ -113,7 +113,7 @@ For the majority of users, just substitute the `device_owner` in the default con
 For example：
 Open the `keyring.toml` file under the `configs` directory and replace `0x00000000000000000000000000000000000000`with your `<Account ID>`。
 
-The default configuration file, encompassing identity information, service ports, P2P network, service launch types, etc., is as follows：
+Use `./crva config -n <network>` to generate the default configuration file, encompassing identity information, service ports, P2P network, service launch types, etc., is as follows：
 
 ```toml
 node_ws_url = "ws://127.0.0.1:9944"
