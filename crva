@@ -5,7 +5,7 @@ set -euo pipefail  # Enable strict mode for better error handling
 # Script constants
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly DOCKER_COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.yml"
-readonly TEMPLATE_FILE="${SCRIPT_DIR}/configs/keyring.template.toml"
+readonly TEMPLATE_FILE="${SCRIPT_DIR}/configs/template.toml"
 readonly KEYRING_FILE="${SCRIPT_DIR}/configs/keyring.toml"
 readonly CONFIG_DIR="${SCRIPT_DIR}/configs"
 
