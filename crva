@@ -106,7 +106,7 @@ check_dependencies() {
     # Check Docker service
     if ! docker info &> /dev/null; then
         error "Docker service is not running. Please start Docker service first."
-    }
+    fi
 }
 
 # Validate network parameter
