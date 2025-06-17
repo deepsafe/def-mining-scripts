@@ -59,6 +59,8 @@ Commands:
   stop     Stop the CRVA service
   status   Show service status
   logs     Show service logs
+  join     Join the network (uses URL from keyring.toml)
+  exit     Exit from the network (uses URL from keyring.toml)
 
 Options:
   -n, --network <mainnet|testnet>  Specify the network (required for config command)
@@ -73,6 +75,8 @@ Examples:
   $(basename "$0") status                       Show service status
   $(basename "$0") logs -f                      Show and follow logs
   $(basename "$0") logs --tail 100              Show last 100 lines of logs
+  $(basename "$0") join                         Join the network
+  $(basename "$0") exit                         Exit from the network
 EOF
 }
 
@@ -193,6 +197,89 @@ show_logs() {
     "${cmd[@]}" || error "Failed to retrieve logs"
 }
 
+# Get node URL from keyring.toml
+get_node_url() {
+    if [[ ! -f "$KEYRING_FILE" ]]; then
+        error "keyring.toml not found. Please generate configuration first:\n$(basename "$0") config --network <mainnet|testnet>"
+    }
+    
+    local url
+    url=$(grep "^node_ws_url" "$KEYRING_FILE" | cut -d'"' -f2)
+    if [[ -z "$url" ]]; then
+        error "Failed to read node_ws_url from keyring.toml"
+    }
+    echo "$url"
+}
+
+# Get image version from docker-compose.yml
+get_image_version() {
+    if [[ ! -f "$DOCKER_COMPOSE_FILE" ]]; then
+        error "docker-compose.yml not found"
+    }
+    
+    local image_line
+    image_line=$(grep "image: deepsafe/def-occlum-keyring:" "$DOCKER_COMPOSE_FILE")
+    if [[ -z "$image_line" ]]; then
+        error "Failed to find image version in docker-compose.yml"
+    }
+    
+    local version
+    version=$(echo "$image_line" | cut -d':' -f3)
+    if [[ -z "$version" ]]; then
+        error "Failed to extract version from image line: $image_line"
+    }
+    echo "$version"
+}
+
+# Execute service with custom command
+execute_service_command() {
+    local action=$1
+    local url
+    url=$(get_node_url)
+    local version
+    version=$(get_image_version)
+    
+    info "Executing $action command with URL: $url"
+    
+    # Run docker container with the specified command
+    local output
+    if ! output=$(docker run --rm \
+        --network host \
+        -e RUST_LOG=info \
+        -v "${SCRIPT_DIR}/configs:/configs" \
+        -v "${SCRIPT_DIR}/data:/root/occlum_instance/data" \
+        -v "${SCRIPT_DIR}/configs/sgx_default_qcnl.conf:/etc/sgx_default_qcnl.conf" \
+        --device /dev/sgx/enclave:/dev/sgx/enclave \
+        --device /dev/sgx/provision:/dev/sgx/provision \
+        "deepsafe/def-occlum-keyring:$version" \
+        bash -c "cp /configs/keyring.toml /root/occlum_instance && \
+                cd /root/occlum_instance && \
+                occlum print mrsigner && \
+                occlum print mrenclave && \
+                occlum run /bin/def-keyring $action $url" 2>&1); then
+        error "Failed to execute $action command:\n$output"
+    fi
+    
+    # Check for specific error patterns in the output
+    if echo "$output" | grep -q "Error:"; then
+        error "Command completed with errors:\n$output"
+    fi
+    
+    # Display the output
+    echo "$output"
+    success "$action command executed successfully"
+}
+
+# Join network
+join_network() {
+    execute_service_command "join"
+}
+
+# Exit network
+exit_network() {
+    execute_service_command "exit"
+}
+
 # Parse command line arguments
 parse_args() {
     local command=""
@@ -202,7 +289,7 @@ parse_args() {
     
     while [[ $# -gt 0 ]]; do
         case $1 in
-            config|start|stop|status|logs)
+            config|start|stop|status|logs|join|exit)
                 [[ -n "$command" ]] && error "Multiple commands specified"
                 command=$1
                 shift
@@ -252,6 +339,12 @@ parse_args() {
             ;;
         logs)
             show_logs "$follow" "$tail"
+            ;;
+        join)
+            join_network
+            ;;
+        exit)
+            exit_network
             ;;
     esac
 }
