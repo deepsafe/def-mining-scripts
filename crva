@@ -134,7 +134,7 @@ generate_keyring_config() {
     
     # Perform replacements
     sed "s/{{protocol_id}}/$protocol_id/" "$TEMPLATE_FILE" > "$temp_file" || error "Failed to replace protocol_id"
-    sed "s/{{boot_nodes}}/$boot_nodes/" "$temp_file" > "$KEYRING_FILE" || error "Failed to replace boot_nodes"
+    sed "s#{{boot_nodes}}#$boot_nodes#" "$temp_file" > "$KEYRING_FILE" || error "Failed to replace boot_nodes"
     
     # Clean up temporary file
     rm -f "$temp_file"
