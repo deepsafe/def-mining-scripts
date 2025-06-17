@@ -16,9 +16,9 @@ atomic_flush = true
 # Listen on this local ip. optional
 #ip = "127.0.0.1"
 port = 38700
-boot_nodes =["/ip4/172.206.59.67/tcp/38711/p2p/12D3KooWCHDHXGmkv6hKvxxhmwAHUWESw2hB1PUKR1cK9n4AUwNu","/ip4/172.183.120.78/tcp/38711/p2p/12D3KooWPbeTa7VeDdQFwBsZrVcF7sGT8aTJ6UjAV6ALyx7z3M45","/ip4/13.64.14.199/tcp/38711/p2p/12D3KooWDqWhQYNjKZoVdSnDfqUD2vYNSHktp6yzuQC9pLwpsttL"]
+boot_nodes = {{boot_nodes}}
 share_peer_interval = 30
 only_global_ips = true
-protocol_id = "betamainnet"
+protocol_id = "{{protocol_id}}"
 # External address that other nodes will use to connect to this node. optional
-#external_multiaddrs = ["/ip4/127.0.0.1/tcp/38700"]
+#external_multiaddrs = ["/ip4/127.0.0.1/tcp/38700"] 

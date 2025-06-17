@@ -1,0 +1,360 @@
+#!/bin/bash
+# CRVA Service Management Script
+set -euo pipefail  # Enable strict mode for better error handling
+
+# Script constants
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly DOCKER_COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.yml"
+readonly TEMPLATE_FILE="${SCRIPT_DIR}/configs/template.toml"
+readonly KEYRING_FILE="${SCRIPT_DIR}/configs/keyring.toml"
+readonly CONFIG_DIR="${SCRIPT_DIR}/configs"
+
+# Color definitions
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[0;33m'
+readonly BLUE='\033[0;34m'
+readonly NC='\033[0m' # No Color
+
+# Network configurations
+declare -A NETWORK_CONFIGS=(
+    ["mainnet"]="betamainnet"
+    ["testnet"]="betatestnet"
+)
+
+# Boot nodes configurations
+declare -A BOOT_NODES=(
+    ["mainnet"]='["/ip4/172.206.59.67/tcp/38711/p2p/12D3KooWCHDHXGmkv6hKvxxhmwAHUWESw2hB1PUKR1cK9n4AUwNu","/ip4/172.183.120.78/tcp/38711/p2p/12D3KooWPbeTa7VeDdQFwBsZrVcF7sGT8aTJ6UjAV6ALyx7z3M45","/ip4/13.64.14.199/tcp/38711/p2p/12D3KooWDqWhQYNjKZoVdSnDfqUD2vYNSHktp6yzuQC9pLwpsttL"]'
+    ["testnet"]='["/ip4/172.210.130.200/tcp/38701/p2p/12D3KooWQBrkBWb3tLoUpxqXebxg1Eab24LfcFP3hv37ZF2c6qgz","/ip4/20.81.161.179/tcp/38701/p2p/12D3KooWMDqap7HMjA6nos1HpHpWt8JBcPepnZgYSd5PPmovAqD7"]'
+)
+
+# Error handling
+error() {
+    echo -e "${RED}Error: $1${NC}" >&2
+    exit 1
+}
+
+info() {
+    echo -e "${BLUE}Info: $1${NC}"
+}
+
+warn() {
+    echo -e "${YELLOW}Warning: $1${NC}"
+}
+
+success() {
+    echo -e "${GREEN}Success: $1${NC}"
+}
+
+# Print help information
+print_help() {
+    cat << EOF
+CRVA Service Management Script
+
+Usage: $(basename "$0") COMMAND [OPTIONS]
+
+Commands:
+  config   Generate keyring.toml configuration file
+  start    Start the CRVA service
+  stop     Stop the CRVA service
+  status   Show service status
+  logs     Show service logs
+  join     Join the network (uses URL from keyring.toml)
+  exit     Exit from the network (uses URL from keyring.toml)
+
+Options:
+  -n, --network <mainnet|testnet>  Specify the network (required for config command)
+  -f, --follow                     Follow log output (only for logs command)
+  -t, --tail <number>              Number of lines to show (only for logs command)
+  -h, --help                       Show this help message
+
+Examples:
+  $(basename "$0") config --network mainnet      Generate mainnet configuration
+  $(basename "$0") start                        Start the service
+  $(basename "$0") stop                         Stop the service
+  $(basename "$0") status                       Show service status
+  $(basename "$0") logs -f                      Show and follow logs
+  $(basename "$0") logs --tail 100              Show last 100 lines of logs
+  $(basename "$0") join                         Join the network
+  $(basename "$0") exit                         Exit from the network
+EOF
+}
+
+# Check if required files and directories exist
+check_files() {
+    [[ -d "$CONFIG_DIR" ]] || error "Config directory not found: $CONFIG_DIR"
+    [[ -f "$DOCKER_COMPOSE_FILE" ]] || error "Docker compose file not found: $DOCKER_COMPOSE_FILE"
+    [[ -f "$TEMPLATE_FILE" ]] || error "Template file not found: $TEMPLATE_FILE"
+}
+
+# Check dependencies
+check_dependencies() {
+    local missing_deps=()
+    
+    if ! command -v docker &> /dev/null; then
+        missing_deps+=("docker")
+    fi
+    
+    if ! command -v docker-compose &> /dev/null; then
+        missing_deps+=("docker-compose")
+    fi
+    
+    if [[ ${#missing_deps[@]} -gt 0 ]]; then
+        error "Missing dependencies: ${missing_deps[*]}\nPlease install the required dependencies first."
+    fi
+    
+    # Check Docker service
+    if ! docker info &> /dev/null; then
+        error "Docker service is not running. Please start Docker service first."
+    fi
+}
+
+# Validate network parameter
+validate_network() {
+    local network=$1
+    if [[ ! "${NETWORK_CONFIGS[$network]+isset}" ]]; then
+        error "Invalid network: $network. Valid options are: ${!NETWORK_CONFIGS[*]}"
+    fi
+}
+
+# Generate keyring.toml based on network
+generate_keyring_config() {
+    local network=$1
+    validate_network "$network"
+    
+    local protocol_id="${NETWORK_CONFIGS[$network]}"
+    local boot_nodes="${BOOT_NODES[$network]}"
+    
+    info "Generating keyring.toml for $network..."
+    
+    # Create a temporary file with secure permissions
+    local temp_file
+    temp_file=$(mktemp)
+    chmod 600 "$temp_file"
+    
+    # Perform replacements
+    sed "s/{{protocol_id}}/$protocol_id/" "$TEMPLATE_FILE" > "$temp_file" || error "Failed to replace protocol_id"
+    sed "s#{{boot_nodes}}#$boot_nodes#" "$temp_file" > "$KEYRING_FILE" || error "Failed to replace boot_nodes"
+    
+    # Clean up temporary file
+    rm -f "$temp_file"
+    
+    success "Generated keyring.toml for $network"
+}
+
+# Check if service is running
+is_service_running() {
+    docker-compose -f "$DOCKER_COMPOSE_FILE" ps --quiet | grep -q .
+}
+
+# Start service
+start_service() {
+    if [[ ! -f "$KEYRING_FILE" ]]; then
+        error "keyring.toml not found. Please generate configuration first:\n$(basename "$0") config --network <mainnet|testnet>"
+    fi
+    
+    if is_service_running; then
+        warn "Service is already running"
+        return 0
+    fi
+    
+    info "Starting CRVA service..."
+    if ! docker-compose -f "$DOCKER_COMPOSE_FILE" up -d; then
+        error "Failed to start service"
+    fi
+    success "Service started successfully"
+}
+
+# Stop service
+stop_service() {
+    if ! is_service_running; then
+        warn "Service is not running"
+        return 0
+    fi
+    
+    info "Stopping CRVA service..."
+    if ! docker-compose -f "$DOCKER_COMPOSE_FILE" down; then
+        error "Failed to stop service"
+    fi
+    success "Service stopped successfully"
+}
+
+# Show service status
+show_status() {
+    info "CRVA service status:"
+    docker-compose -f "$DOCKER_COMPOSE_FILE" ps || error "Failed to get service status"
+}
+
+# Show service logs
+show_logs() {
+    local follow=$1
+    local tail=$2
+    local cmd=("docker-compose" "-f" "$DOCKER_COMPOSE_FILE" "logs")
+    
+    [[ "$follow" == true ]] && cmd+=("-f")
+    [[ -n "$tail" ]] && cmd+=("--tail" "$tail")
+    
+    "${cmd[@]}" || error "Failed to retrieve logs"
+}
+
+# Get node URL from keyring.toml
+get_node_url() {
+    if [[ ! -f "$KEYRING_FILE" ]]; then
+        error "keyring.toml not found. Please generate configuration first:\n$(basename "$0") config --network <mainnet|testnet>"
+    fi
+    
+    local url
+    url=$(grep "^node_ws_url" "$KEYRING_FILE" | cut -d'"' -f2)
+    if [[ -z "$url" ]]; then
+        error "Failed to read node_ws_url from keyring.toml"
+    fi
+    echo "$url"
+}
+
+# Get image version from docker-compose.yml
+get_image_version() {
+    if [[ ! -f "$DOCKER_COMPOSE_FILE" ]]; then
+        error "docker-compose.yml not found"
+    fi
+    
+    local image_line
+    image_line=$(grep "image: deepsafe/def-occlum-keyring:" "$DOCKER_COMPOSE_FILE")
+    if [[ -z "$image_line" ]]; then
+        error "Failed to find image version in docker-compose.yml"
+    fi
+    
+    local version
+    version=$(echo "$image_line" | cut -d':' -f3)
+    if [[ -z "$version" ]]; then
+        error "Failed to extract version from image line: $image_line"
+    fi
+    echo "$version"
+}
+
+# Execute service with custom command
+execute_service_command() {
+    local action=$1
+    local url
+    url=$(get_node_url)
+    local version
+    version=$(get_image_version)
+    
+    info "Executing $action command with URL: $url"
+    
+    # Run docker container with the specified command
+    local output
+    if ! output=$(docker run --rm \
+        --network host \
+        -e RUST_LOG=info \
+        -v "${SCRIPT_DIR}/configs:/configs" \
+        -v "${SCRIPT_DIR}/data:/root/occlum_instance/data" \
+        -v "${SCRIPT_DIR}/configs/sgx_default_qcnl.conf:/etc/sgx_default_qcnl.conf" \
+        --device /dev/sgx/enclave:/dev/sgx/enclave \
+        --device /dev/sgx/provision:/dev/sgx/provision \
+        "deepsafe/def-occlum-keyring:$version" \
+        bash -c "cp /configs/keyring.toml /root/occlum_instance && \
+                cd /root/occlum_instance && \
+                occlum print mrsigner && \
+                occlum print mrenclave && \
+                occlum run /bin/def-keyring $action $url" 2>&1); then
+        error "Failed to execute $action command:\n$output"
+    fi
+    
+    # Check for specific error patterns in the output
+    if echo "$output" | grep -q "Error:"; then
+        error "Command completed with errors:\n$output"
+    fi
+    
+    # Display the output
+    echo "$output"
+    success "$action command executed successfully"
+}
+
+# Join network
+join_network() {
+    execute_service_command "join"
+}
+
+# Exit network
+exit_network() {
+    execute_service_command "exit"
+}
+
+# Parse command line arguments
+parse_args() {
+    local command=""
+    local network=""
+    local follow=false
+    local tail=""
+    
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            config|start|stop|status|logs|join|exit)
+                [[ -n "$command" ]] && error "Multiple commands specified"
+                command=$1
+                shift
+                ;;
+            -n|--network)
+                [[ -z "$2" ]] && error "Network parameter requires a value"
+                network=$2
+                shift 2
+                ;;
+            -f|--follow)
+                follow=true
+                shift
+                ;;
+            -t|--tail)
+                [[ -z "$2" ]] && error "Tail parameter requires a value"
+                [[ "$2" =~ ^[0-9]+$ ]] || error "Tail parameter must be a number"
+                tail=$2
+                shift 2
+                ;;
+            -h|--help)
+                print_help
+                exit 0
+                ;;
+            *)
+                error "Unknown option: $1"
+                ;;
+        esac
+    done
+    
+    # Validate command
+    [[ -z "$command" ]] && error "Command required. Use -h for help."
+    
+    # Execute command
+    case $command in
+        config)
+            [[ -z "$network" ]] && error "Network parameter is required for config command"
+            generate_keyring_config "$network"
+            ;;
+        start)
+            start_service
+            ;;
+        stop)
+            stop_service
+            ;;
+        status)
+            show_status
+            ;;
+        logs)
+            show_logs "$follow" "$tail"
+            ;;
+        join)
+            join_network
+            ;;
+        exit)
+            exit_network
+            ;;
+    esac
+}
+
+# Main function
+main() {
+    check_files
+    check_dependencies
+    parse_args "$@"
+}
+
+# Execute main function
+main "$@"
