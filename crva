@@ -24,7 +24,7 @@ declare -A NETWORK_CONFIGS=(
 
 # Boot nodes configurations
 declare -A BOOT_NODES=(
-    ["mainnet"]='["/ip4/172.210.130.200/tcp/38701/p2p/12D3KooWQBrkBWb3tLoUpxqXebxg1Eab24LfcFP3hv37ZF2c6qgz","/ip4/20.81.161.179/tcp/38701/p2p/12D3KooWMDqap7HMjA6nos1HpHpWt8JBcPepnZgYSd5PPmovAqD7"]'
+    ["mainnet"]='["/ip4/172.206.59.67/tcp/38711/p2p/12D3KooWCHDHXGmkv6hKvxxhmwAHUWESw2hB1PUKR1cK9n4AUwNu","/ip4/172.183.120.78/tcp/38711/p2p/12D3KooWPbeTa7VeDdQFwBsZrVcF7sGT8aTJ6UjAV6ALyx7z3M45","/ip4/13.64.14.199/tcp/38711/p2p/12D3KooWDqWhQYNjKZoVdSnDfqUD2vYNSHktp6yzuQC9pLwpsttL"]'
     ["testnet"]='["/ip4/172.210.130.200/tcp/38701/p2p/12D3KooWQBrkBWb3tLoUpxqXebxg1Eab24LfcFP3hv37ZF2c6qgz","/ip4/20.81.161.179/tcp/38701/p2p/12D3KooWMDqap7HMjA6nos1HpHpWt8JBcPepnZgYSd5PPmovAqD7"]'
 )
 
